@@ -61,30 +61,46 @@ if "Close" not in data.columns:
 data["Return"] = data["Close"].pct_change()
 returns = data["Return"].dropna()
 
-# FIXED KPI CALCULATION
+# ---------- FIXED KPI SECTION ----------
+data["Return"] = data["Close"].pct_change()
+returns = data["Return"].dropna()
+
+# Safe last/prev close
 if len(data) >= 2:
     last_close = float(data["Close"].iloc[-1])
     prev_close = float(data["Close"].iloc[-2])
     daily_change_pct = ((last_close - prev_close) / prev_close) * 100
 else:
     last_close = float(data["Close"].iloc[-1])
-    prev_close = np.nan
+    prev_close = float("nan")
     daily_change_pct = 0.0
 
-annualized_vol = returns.std() * np.sqrt(252) if not returns.empty else np.nan
-avg_volume = data["Volume"].mean() if "Volume" in data.columns else np.nan
+# Safe avg volume
+if "Volume" in data.columns:
+    avg_volume = float(data["Volume"].mean())
+else:
+    avg_volume = float("nan")
 
-# Display KPIs
-st.subheader(f"Overview: {ticker.upper()}")
+if returns.empty:
+    annualized_vol = float("nan")
+else:
+    annualized_vol = float(returns.std() * np.sqrt(252))
 
+# ----- Display KPIs -----
 k1, k2, k3, k4 = st.columns(4)
 
 k1.metric("Last Close", f"${last_close:,.2f}")
 k2.metric("Daily Change (%)", f"{daily_change_pct:,.2f}%")
 k3.metric("Annualized Volatility", f"{annualized_vol * 100:,.2f}%" if not np.isnan(annualized_vol) else "N/A")
-k4.metric("Average Volume", f"{avg_volume:,.0f}" if not np.isnan(avg_volume) else "N/A")
 
-st.markdown("---")
+# Volume display
+if np.isnan(avg_volume):
+    avg_vol_display = "N/A"
+else:
+    avg_vol_display = f"{avg_volume:,.0f}"
+
+k4.metric("Average Volume", avg_vol_display)
+
 
 # ---------- TABS ----------
 tab_price, tab_returns, tab_table = st.tabs(["📉 Price & Moving Averages", "📊 Returns & Volatility", "📋 Data & Download"])
