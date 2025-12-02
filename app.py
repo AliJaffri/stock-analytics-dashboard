@@ -58,16 +58,16 @@ if data is None:
     st.stop()
 
 # Ensure we have required columns
-if "Adj Close" not in data.columns:
-    st.error("Downloaded data does not contain 'Adj Close' prices. Try a different ticker.")
+if "Close" not in data.columns:
+    st.error("Downloaded data does not contain 'Close' prices. Try a different ticker.")
     st.stop()
 
 # ---------- BASIC STATS ----------
-data["Return"] = data["Adj Close"].pct_change()
+data["Return"] = data["Close"].pct_change()
 returns = data["Return"].dropna()
 
-last_close = data["Adj Close"].iloc[-1]
-prev_close = data["Adj Close"].iloc[-2] if len(data) > 1 else np.nan
+last_close = data["Close"].iloc[-1]
+prev_close = data["Close"].iloc[-2] if len(data) > 1 else np.nan
 daily_change_pct = (last_close - prev_close) / prev_close * 100 if not np.isnan(prev_close) else 0.0
 annualized_vol = returns.std() * np.sqrt(252) if not returns.empty else np.nan
 avg_volume = data["Volume"].mean() if "Volume" in data.columns else np.nan
@@ -102,7 +102,7 @@ with tab_price:
     with ma_col2:
         ma_long = st.number_input("Long MA (days)", min_value=50, max_value=200, value=50)
     with ma_col3:
-        price_column = st.selectbox("Price type", options=["Adj Close", "Close", "Open"])
+        price_column = st.selectbox("Price type", options=["Close", "Close", "Open"])
 
     data[f"MA {ma_short}"] = data[price_column].rolling(ma_short).mean()
     data[f"MA {ma_long}"] = data[price_column].rolling(ma_long).mean()
