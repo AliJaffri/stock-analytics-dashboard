@@ -1,5 +1,4 @@
 import datetime as dt
-
 import numpy as np
 import pandas as pd
 import yfinance as yf
@@ -32,7 +31,7 @@ interval = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 st.sidebar.caption("Powered by Streamlit + yfinance")
 
-# ---------- HELPER: FETCH DATA ----------
+# ---------- FETCH DATA ----------
 @st.cache_data(show_spinner=True)
 def load_price_data(ticker, start, end, interval):
     try:
@@ -44,84 +43,82 @@ def load_price_data(ticker, start, end, interval):
     except Exception:
         return None
 
-# ---------- MAIN APP ----------
+# ---------- MAIN ----------
 st.title("📊 Stock Analytics Dashboard")
-
-if not ticker:
-    st.info("Please enter a ticker symbol in the sidebar to begin.")
-    st.stop()
 
 data = load_price_data(ticker, start_date, end_date, interval)
 
 if data is None:
-    st.error("Could not download data. Please check the ticker symbol or try a different date range.")
+    st.error("Could not download data. Check ticker or date range.")
     st.stop()
 
-# Ensure we have required columns
+# Ensure Close exists
 if "Close" not in data.columns:
-    st.error("Downloaded data does not contain 'Close' prices. Try a different ticker.")
+    st.error("The dataset does not include a 'Close' price. Cannot continue.")
     st.stop()
 
 # ---------- BASIC STATS ----------
 data["Return"] = data["Close"].pct_change()
 returns = data["Return"].dropna()
 
-last_close = data["Close"].iloc[-1]
-prev_close = data["Close"].iloc[-2] if len(data) > 1 else np.nan
-daily_change_pct = (last_close - prev_close) / prev_close * 100 if not np.isnan(prev_close) else 0.0
+# FIXED KPI CALCULATION
+if len(data) >= 2:
+    last_close = float(data["Close"].iloc[-1])
+    prev_close = float(data["Close"].iloc[-2])
+    daily_change_pct = ((last_close - prev_close) / prev_close) * 100
+else:
+    last_close = float(data["Close"].iloc[-1])
+    prev_close = np.nan
+    daily_change_pct = 0.0
+
 annualized_vol = returns.std() * np.sqrt(252) if not returns.empty else np.nan
 avg_volume = data["Volume"].mean() if "Volume" in data.columns else np.nan
 
+# Display KPIs
 st.subheader(f"Overview: {ticker.upper()}")
 
-kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+k1, k2, k3, k4 = st.columns(4)
 
-with kpi1:
-    st.metric("Last Close", f"${last_close:,.2f}")
-with kpi2:
-    st.metric("Daily Change", f"{daily_change_pct:,.2f}%")
-with kpi3:
-    st.metric("Annualized Volatility", f"{annualized_vol * 100:,.2f}%" if not np.isnan(annualized_vol) else "N/A")
-with kpi4:
-    st.metric("Average Volume", f"{avg_volume:,.0f}" if not np.isnan(avg_volume) else "N/A")
+k1.metric("Last Close", f"${last_close:,.2f}")
+k2.metric("Daily Change (%)", f"{daily_change_pct:,.2f}%")
+k3.metric("Annualized Volatility", f"{annualized_vol * 100:,.2f}%" if not np.isnan(annualized_vol) else "N/A")
+k4.metric("Average Volume", f"{avg_volume:,.0f}" if not np.isnan(avg_volume) else "N/A")
 
 st.markdown("---")
 
 # ---------- TABS ----------
-tab_price, tab_returns, tab_table = st.tabs(
-    ["📉 Price & Moving Averages", "📊 Returns & Volatility", "📋 Data & Download"]
-)
+tab_price, tab_returns, tab_table = st.tabs(["📉 Price & Moving Averages", "📊 Returns & Volatility", "📋 Data & Download"])
 
-# ---------- TAB 1: PRICE & MAs ----------
+# ---------- PRICE & MAs ----------
 with tab_price:
     st.subheader("Price with Moving Averages")
 
-    ma_col1, ma_col2, ma_col3 = st.columns(3)
-    with ma_col1:
+    c1, c2, c3 = st.columns(3)
+    with c1:
         ma_short = st.number_input("Short MA (days)", min_value=5, max_value=50, value=20)
-    with ma_col2:
+    with c2:
         ma_long = st.number_input("Long MA (days)", min_value=50, max_value=200, value=50)
-    with ma_col3:
-        price_column = st.selectbox("Price type", options=["Close", "Close", "Open"])
+    with c3:
+        price_column = st.selectbox("Price type", options=["Close", "Open", "High", "Low"])
 
-    data[f"MA {ma_short}"] = data[price_column].rolling(ma_short).mean()
-    data[f"MA {ma_long}"] = data[price_column].rolling(ma_long).mean()
+    data[f"MA{ma_short}"] = data[price_column].rolling(ma_short).mean()
+    data[f"MA{ma_long}"] = data[price_column].rolling(ma_long).mean()
 
     fig_price = px.line(
         data,
         x="Date",
-        y=[price_column, f"MA {ma_short}", f"MA {ma_long}"],
-        labels={"value": "Price", "Date": "Date", "variable": "Series"},
-        title=f"{ticker.upper()} Price and Moving Averages",
+        y=[price_column, f"MA{ma_short}", f"MA{ma_long}"],
+        title=f"{ticker.upper()} Price & Moving Averages",
+        labels={"value": "Price", "Date": "Date", "variable": "Series"}
     )
     st.plotly_chart(fig_price, use_container_width=True)
 
-# ---------- TAB 2: RETURNS & VOL ----------
+# ---------- RETURNS ----------
 with tab_returns:
     st.subheader("Daily Returns & Volatility")
 
     if returns.empty:
-        st.warning("Not enough data to compute returns.")
+        st.warning("Not enough data for returns.")
     else:
         col_r1, col_r2 = st.columns([2, 1])
 
@@ -130,25 +127,23 @@ with tab_returns:
                 data,
                 x="Date",
                 y="Return",
-                labels={"Return": "Daily Return", "Date": "Date"},
                 title="Daily Returns",
             )
             st.plotly_chart(fig_ret, use_container_width=True)
 
         with col_r2:
-            st.write("Summary Statistics (Returns)")
+            st.write("Return Summary Statistics")
             st.dataframe(returns.describe().to_frame().rename(columns={"Return": "Value"}))
 
         st.markdown("#### Return Distribution")
         fig_hist = px.histogram(
             returns,
             nbins=40,
-            labels={"value": "Daily Return"},
             title="Histogram of Daily Returns",
         )
         st.plotly_chart(fig_hist, use_container_width=True)
 
-# ---------- TAB 3: DATA & DOWNLOAD ----------
+# ---------- DATA ----------
 with tab_table:
     st.subheader("Raw Price Data")
 
@@ -162,5 +157,5 @@ with tab_table:
         mime="text/csv",
     )
 
-    st.caption("Tip: You can open this CSV in Excel, R, Python, or any stats software.")
+    st.caption("You can open the CSV in Excel, Python, or R.")
 
